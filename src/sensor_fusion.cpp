@@ -28,14 +28,19 @@
 
 #include <velodyne_camera_calibration/coloring.h>
 
+
+image_geometry::PinholeCameraModel cam_model;
+
 template<typename T_p>
 class SensorFusion{
     private:
         ros::NodeHandle nh;
 
-        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::CameraInfo, sensor_msgs::PointCloud2> sensor_fusion_sync_subs;
+        typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, 
+                                            // sensor_msgs::CameraInfo, 
+                                            sensor_msgs::PointCloud2> sensor_fusion_sync_subs;
         message_filters::Subscriber<sensor_msgs::Image> image_sub;
-        message_filters::Subscriber<sensor_msgs::CameraInfo> cinfo_sub;
+        // message_filters::Subscriber<sensor_msgs::CameraInfo> cinfo_sub;
         message_filters::Subscriber<sensor_msgs::PointCloud2> lidar_sub;
         message_filters::Synchronizer<sensor_fusion_sync_subs> sensor_fusion_sync;
 
@@ -48,18 +53,28 @@ class SensorFusion{
 
     public:
         SensorFusion();
-        void Callback(const sensor_msgs::Image::ConstPtr&, const sensor_msgs::CameraInfo::ConstPtr&, const sensor_msgs::PointCloud2::ConstPtr&);
-        void sensor_fusion(const sensor_msgs::Image::ConstPtr, const sensor_msgs::CameraInfo::ConstPtr, const sensor_msgs::PointCloud2::ConstPtr);
+        void Callback(const sensor_msgs::Image::ConstPtr&, 
+                        // const sensor_msgs::CameraInfo::ConstPtr&, 
+                        const sensor_msgs::PointCloud2::ConstPtr&);
+        void sensor_fusion(const sensor_msgs::Image::ConstPtr,
+                            //  const sensor_msgs::CameraInfo::ConstPtr, 
+                            const sensor_msgs::PointCloud2::ConstPtr);
         bool tflistener(std::string target_frame, std::string source_frame);
 };
 
 template<typename T_p>
 SensorFusion<T_p>::SensorFusion()
     : nh("~"),
-      image_sub(nh, "/image", 10), cinfo_sub(nh, "/cinfo", 10), lidar_sub(nh, "/lidar", 10),
-      sensor_fusion_sync(sensor_fusion_sync_subs(10), image_sub, cinfo_sub, lidar_sub)
+      image_sub(nh, "/image", 10), 
+    //   cinfo_sub(nh, "/cinfo", 10), 
+    lidar_sub(nh, "/lidar", 10),
+      sensor_fusion_sync(sensor_fusion_sync_subs(10), image_sub, 
+    //   cinfo_sub, 
+    lidar_sub)
 {
-    sensor_fusion_sync.registerCallback(boost::bind(&SensorFusion::Callback, this, _1, _2, _3));
+    sensor_fusion_sync.registerCallback(boost::bind(&SensorFusion::Callback, this, _1, 
+                                                                                    // _2, 
+                                                                                    _2));
     pub_image = nh.advertise<sensor_msgs::Image>("/projection", 10);
     pub_cloud = nh.advertise<sensor_msgs::PointCloud2>("/colord_cloud", 10);
     flag = false;
@@ -67,12 +82,14 @@ SensorFusion<T_p>::SensorFusion()
 
 template<typename T_p>
 void SensorFusion<T_p>::Callback(const sensor_msgs::Image::ConstPtr& image,
-                             const sensor_msgs::CameraInfo::ConstPtr& cinfo,
+                            //  const sensor_msgs::CameraInfo::ConstPtr& cinfo,
                              const sensor_msgs::PointCloud2::ConstPtr& pc2)
 {
 
     if(!flag) tflistener(image->header.frame_id, pc2->header.frame_id);
-    sensor_fusion(image, cinfo, pc2);
+    sensor_fusion(image, 
+                    // cinfo, 
+                    pc2);
 }
 
 template<typename T_p>
@@ -94,7 +111,7 @@ bool SensorFusion<T_p>::tflistener(std::string target_frame, std::string source_
 
 template<typename T_p>
 void SensorFusion<T_p>::sensor_fusion(const sensor_msgs::Image::ConstPtr image,
-                                      const sensor_msgs::CameraInfo::ConstPtr cinfo,
+                                    //   const sensor_msgs::CameraInfo::ConstPtr cinfo,
                                       const sensor_msgs::PointCloud2::ConstPtr pc2)
 {
     pcl::PointCloud<pcl::PointXYZI>::Ptr velodyne_cloud(new pcl::PointCloud<pcl::PointXYZI>);
@@ -127,8 +144,8 @@ void SensorFusion<T_p>::sensor_fusion(const sensor_msgs::Image::ConstPtr image,
     cv::cvtColor(cv_image ,rgb_image, CV_BGR2RGB);
 
     // set PinholeCameraModel
-    image_geometry::PinholeCameraModel cam_model;
-    cam_model.fromCameraInfo(cinfo);
+    // image_geometry::PinholeCameraModel cam_model;
+    // cam_model.fromCameraInfo(cinfo);
 
     // SensorFusion Step
     typename pcl::PointCloud<T_p>::Ptr colored_cloud(new pcl::PointCloud<T_p>);
@@ -188,6 +205,26 @@ void SensorFusion<T_p>::sensor_fusion(const sensor_msgs::Image::ConstPtr image,
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "sensor_fusion");
+
+    sensor_msgs::CameraInfo cam_info;
+    // cam_info.header.stamp.sec = 1699532769;
+    // cam_info.header.stamp.nsec = 319062500;
+    cam_info.header.frame_id = "camera_color_optical_frame";
+    cam_info.height = 720;
+    cam_info.width = 1280;
+    cam_info.distortion_model = "plumb_bob";
+    cam_info.D = {-0.057686787098646164, 0.06685127317905426, -0.0002468553720973432, 0.0007276988471858203, -0.021987270563840866};
+    cam_info.K = {641.9744873046875, 0.0, 637.8692016601562, 0.0, 641.239501953125, 364.94647216796875, 0.0, 0.0, 1.0};
+    cam_info.R = {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0};
+    cam_info.P = {641.9744873046875, 0.0, 637.8692016601562, 0.0, 0.0, 641.239501953125, 364.94647216796875, 0.0, 0.0, 0.0, 1.0, 0.0};
+    cam_info.binning_x = 0;
+    cam_info.binning_y = 0;
+    cam_info.roi.x_offset = 0;
+    cam_info.roi.y_offset = 0;
+    cam_info.roi.height = 0;
+    cam_info.roi.width = 0;
+    cam_info.roi.do_rectify = false;
+    cam_model.fromCameraInfo(cam_info);
 
     SensorFusion<pcl::PointXYZRGB> cr;
 
